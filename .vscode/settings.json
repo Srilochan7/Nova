@@ -1,0 +1,9 @@
+{
+    "github.copilot.chat.experimental.mcp.servers": {
+        "manim-server": {
+            "command": "uv",
+            "args": ["run", "python", "falcon.py"],
+            "cwd": "c:\\Users\\kalak\\Downloads\\Desktop\\nova"
+        }
+    }
+}
