@@ -12,57 +12,55 @@ server = FastMCP("nova")
 MANIM_PATH = os.getenv("MANIM_EXECUTABLE", "manim")
 
 # Base output dir (persistent, not temp)
-OUTPUT_DIR = Path(__file__).resolve().parent / "media"
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+BASE_DIR = Path(__file__).resolve().parent / "media"
+BASE_DIR.mkdir(parents=True, exist_ok=True)
 
+TEMP_DIRS = {}
 
 @server.tool()
 def render_scene(code: str) -> str:
     """
-    Render a Manim scene from a code string.
-    Returns the path to the generated video.
+    Render a Manim scene from code and display in Claude.
     """
-    temp_dir = tempfile.mkdtemp(dir=OUTPUT_DIR)
-    script_file = Path(temp_dir) / "scene.py"
+    # Use fixed temp directory like the reference
+    tmpdir = BASE_DIR / "manim_tmp"
+    tmpdir.mkdir(exist_ok=True)
+    script_file = tmpdir / "scene.py"
 
     try:
-        # Write user-provided Manim script
+        # Write Manim script
         script_file.write_text(code)
 
-        # Run manim as subprocess
+        # Run manim with -p flag (preview) like the working reference
         result = subprocess.run(
-            [MANIM_PATH, "-pql", str(script_file)],
-            cwd=temp_dir,
+            [MANIM_PATH, "-p", str(script_file)],
             capture_output=True,
             text=True,
+            cwd=tmpdir
         )
 
-        if result.returncode != 0:
-            return f"❌ Render failed:\n{result.stderr}"
-
-        # Find generated media dir
-        videos_dir = Path(temp_dir) / "media" / "videos"
-        if videos_dir.exists():
-            return f"✅ Render complete! Check {videos_dir}"
+        if result.returncode == 0:
+            TEMP_DIRS[str(tmpdir)] = True
+            return f"✅ Execution successful. Video generated.\n📁 Check the generated video at: {tmpdir}"
         else:
-            return "⚠️ Render completed but no video found."
+            return f"❌ Execution failed: {result.stderr}"
 
     except Exception as e:
-        return f"⚠️ Error: {e}"
+        return f"⚠️ Error during execution: {str(e)}"
 
 
 @server.tool()
-def cleanup(path: str) -> str:
-    """
-    Delete a temporary render directory.
-    """
+def cleanup(directory: str) -> str:
+    """Clean up the specified Manim temporary directory after execution."""
     try:
-        shutil.rmtree(path)
-        return f"🗑️ Cleaned: {path}"
+        if Path(directory).exists():
+            shutil.rmtree(directory)
+            return f"🗑️ Cleanup successful for directory: {directory}"
+        else:
+            return f"⚠️ Directory not found: {directory}"
     except Exception as e:
-        return f"⚠️ Failed cleanup: {e}"
+        return f"⚠️ Failed to clean up directory: {directory}. Error: {str(e)}"
 
 
 if __name__ == "__main__":
-    # Run server via stdio (Claude/other MCP clients expect this)
-    server.run("stdio")
+    server.run("stdio") 
